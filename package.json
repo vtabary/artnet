@@ -1,10 +1,11 @@
 {
-  "version": "1.4.0",
-  "name": "artnet",
+  "version": "2.0.0",
+  "name": "@vtabary/artnet",
   "description": "Module to send commands to an Art-Net node",
-  "homepage": "http://github.com/hobbyquaker/artnet",
-  "author": "hobbyquaker <hq@ccu.io> https://github.com/hobbyquaker",
+  "homepage": "http://github.com/vtabary/artnet",
+  "author": "Vincent Tabary https://github.com/vtabary",
   "contributors": [
+    "hobbyquaker <hq@ccu.io> https://github.com/hobbyquaker",
     "sparks-alec https://github.com/sparks-alec",
     "martinzuern https://github.com/martinzuern",
     "solexious https://github.com/solexious",
@@ -24,19 +25,30 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hobbyquaker/artnet.git"
+    "url": "git+https://github.com/vtabary/artnet.git"
   },
-  "main": "./lib/artnet.js",
-  "dependencies": {},
+  "main": "./dist/artnet.js",
   "bugs": {
-    "url": "https://github.com/hobbyquaker/artnet/issues"
+    "url": "https://github.com/vtabary/artnet/issues"
   },
+  "private": "false",
   "license": "MIT",
+  "type": "module",
   "devDependencies": {
-    "camo-purge": "latest",
-    "xo": "latest"
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22",
+    "jest": "^30.2.0",
+    "prettier": "^3.7.4",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
   },
   "scripts": {
-    "test": "camo-purge ; xo --space 4 --no-esnext --ignore test.js"
-  }
+    "test": "jest",
+    "build": "tsc"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }
