@@ -31,7 +31,7 @@
   "bugs": {
     "url": "https://github.com/vtabary/artnet/issues"
   },
-  "private": "false",
+  "private": false,
   "license": "MIT",
   "type": "module",
   "devDependencies": {
