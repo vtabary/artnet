@@ -36,32 +36,42 @@ describe("ArtNet", () => {
     jest.useRealTimers();
   });
 
-  describe("Constructor", () => {
-    test("should initialize with default options", () => {
+  describe("#new", () => {
+    it("should initialize with default options", () => {
       new ArtNet({});
       expect(dgram.createSocket).toHaveBeenCalledWith({
         type: "udp4",
         reuseAddr: true,
       });
+    });
+  });
+
+  describe("open()", () => {
+    it("should open the socket with default options", () => {
+      const artnet = new ArtNet({});
+      artnet.open();
       // Default host is broadcast, so it should bind
       expect(mockSocket.bind).toHaveBeenCalled();
       expect(mockSocket.setBroadcast).toHaveBeenCalledWith(true);
     });
 
-    test("should initialize with specific host (unicast)", () => {
-      new ArtNet({ host: "192.168.1.10" });
+    it("should open the socket with specific host (unicast)", () => {
+      const artnet = new ArtNet({ host: "192.168.1.10" });
+      artnet.open();
       // Unicast usually doesn't bind in this implementation unless it ends in 255
       expect(mockSocket.bind).not.toHaveBeenCalled();
     });
 
-    test("should bind if host ends in 255", () => {
-      new ArtNet({ host: "192.168.1.255" });
+    it("should open the socket if host ends in 255", () => {
+      const artnet = new ArtNet({ host: "192.168.1.255" });
+      artnet.open();
       expect(mockSocket.bind).toHaveBeenCalled();
       expect(mockSocket.setBroadcast).toHaveBeenCalledWith(true);
     });
 
-    test("should bind to interface if provided", () => {
-      new ArtNet({ iface: "1.2.3.4" });
+    it("should open the socket to interface if provided", () => {
+      const artnet = new ArtNet({ iface: "1.2.3.4" });
+      artnet.open();
       expect(mockSocket.bind).toHaveBeenCalledWith(
         6454,
         "1.2.3.4",
@@ -75,13 +85,14 @@ describe("ArtNet", () => {
 
     beforeEach(() => {
       artnet = new ArtNet({});
+      artnet.open();
     });
 
     afterEach(() => {
       artnet.close();
     });
 
-    test("should set a single value (channel 1 default)", async () => {
+    it("should set a single value (channel 1 default)", async () => {
       await artnet.set(255);
       expect(mockSocket.send).toHaveBeenCalled();
       const buffer = mockSocket.send.mock.calls[0][0];
@@ -89,15 +100,16 @@ describe("ArtNet", () => {
       expect(buffer[18]).toBe(255);
     });
 
-    test("should set a single value with channel", async () => {
+    it("should set a single value with channel", async () => {
+      // 10 is matching the channel 11 since, the channel 1 is at index 0
       await artnet.set(10, 128);
       expect(mockSocket.send).toHaveBeenCalled();
       const buffer = mockSocket.send.mock.calls[0][0];
-      // Channel 10 is at index 18 + 9 = 27
-      expect(buffer[27]).toBe(128);
+      // Channel 11 is at index 18 + 10 = 28
+      expect(buffer[28]).toBe(128);
     });
 
-    test("should set multiple values", async () => {
+    it("should set multiple values", async () => {
       await artnet.set([10, 20, 30]);
       expect(mockSocket.send).toHaveBeenCalled();
       const buffer = mockSocket.send.mock.calls[0][0];
@@ -106,7 +118,7 @@ describe("ArtNet", () => {
       expect(buffer[20]).toBe(30);
     });
 
-    test("should set values with universe", async () => {
+    it("should set values with universe", async () => {
       await artnet.set(1, 1, 255);
       expect(mockSocket.send).toHaveBeenCalled();
       const buffer = mockSocket.send.mock.calls[0][0];
@@ -115,7 +127,7 @@ describe("ArtNet", () => {
       expect(buffer[15]).toBe(0);
     });
 
-    test("should throttle sending", async () => {
+    it("should throttle sending", async () => {
       await artnet.set(1, 255);
       expect(mockSocket.send).toHaveBeenCalledTimes(1);
 
@@ -126,10 +138,11 @@ describe("ArtNet", () => {
       expect(mockSocket.send).toHaveBeenCalledTimes(2); // Delayed sent
     });
 
-    test("should send refresh packets", async () => {
+    it("should send refresh packets", async () => {
       // Re-init with short refresh
       artnet.close();
       artnet = new ArtNet({ refresh: 100 });
+      artnet.open();
 
       await artnet.set(1, 255);
       expect(mockSocket.send).toHaveBeenCalledTimes(1);
@@ -140,8 +153,10 @@ describe("ArtNet", () => {
   });
 
   describe("trigger()", () => {
-    test("should send trigger packet", async () => {
+    it("should send trigger packet", async () => {
       const artnet = new ArtNet({});
+      artnet.open();
+
       await artnet.trigger(100, 200);
       expect(mockSocket.send).toHaveBeenCalled();
       const buffer = mockSocket.send.mock.calls[0][0];
@@ -161,9 +176,11 @@ describe("ArtNet", () => {
   });
 
   describe("Configuration", () => {
-    test("setHost should update host", async () => {
+    it("setHost should update host", async () => {
       const artnet = new ArtNet({});
       artnet.setHost("10.0.0.1");
+
+      artnet.open();
       await artnet.set(1, 255);
       expect(mockSocket.send).toHaveBeenCalledWith(
         expect.any(Buffer),
@@ -176,9 +193,11 @@ describe("ArtNet", () => {
       artnet.close();
     });
 
-    test("setPort should update port", async () => {
+    it("setPort should update port", async () => {
       const artnet = new ArtNet({ host: "10.0.0.1" });
       artnet.setPort(1234);
+
+      artnet.open();
       await artnet.set(1, 255);
       expect(mockSocket.send).toHaveBeenCalledWith(
         expect.any(Buffer),
@@ -191,7 +210,7 @@ describe("ArtNet", () => {
       artnet.close();
     });
 
-    test("setPort should throw if broadcast", () => {
+    it("setPort should throw if broadcast", () => {
       const artnet = new ArtNet({});
       expect(() => artnet.setPort(1234)).toThrow();
       artnet.close();

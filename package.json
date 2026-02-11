@@ -27,7 +27,7 @@
     "type": "git",
     "url": "git+https://github.com/vtabary/artnet.git"
   },
-  "main": "./dist/artnet.js",
+  "main": "./dist/index.js",
   "bugs": {
     "url": "https://github.com/vtabary/artnet/issues"
   },

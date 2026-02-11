@@ -4,9 +4,13 @@
 
 > This is a [Node.js](http://nodejs.org) module that can be used to send ArtDMX packages to an [Art-Net](http://en.wikipedia.org/wiki/Art-Net) node.
 
-Based on the work of [hobbyquaker](https://github.com/hobbyquaker)
+Based on the work of [hobbyquaker](https://github.com/hobbyquaker/artnet)
 
 ## Usage
+
+### Basic Artnet behavior
+
+The `Artnet` class is a easy way to set a DMX value and send a trigger packet
 
 connect, set channel 1 to 255, disconnect.
 
@@ -27,28 +31,28 @@ The set method can set multiple channels at once:
 
 Use an array to set subsequent channels...
 
-```javascript
+```typescript
 // set channel 100 to 10, channel 101 to 20 and channel 102 to 30
 await artnet.set(100, [10, 20, 30]);
 ```
 
 ...if you want to keep certain channels unchanged set them to null
 
-```javascript
+```typescript
 // set channel 50 to 255 and channel 52 to 127
 await artnet.set(50, [255, null, 127]);
 ```
 
 you can omit the channel, it defaults to 1
 
-```javascript
+```typescript
 // Set channel 1 to 255 and channel 2 to 127:
 await artnet.set([255, 127]);
 ```
 
 Additionally, you can send trigger macros to devices.
 
-```javascript
+```typescript
 // Send key 3, subkey 1 to all devices.
 await artnet.trigger(1, 3);
 
@@ -58,7 +62,7 @@ await artnet.trigger(27243, 71, 2);
 
 This lib throttles the maximum send rate to ~40Hz. Unchanged data is refreshed every ~4s.
 
-## Options
+#### Options
 
 - host (Default `"255.255.255.255"`)
 - port (Default `6454`)
@@ -66,18 +70,20 @@ This lib throttles the maximum send rate to ~40Hz. Unchanged data is refreshed e
 - iface (optional string IP address - bind udp socket to specific network interface)
 - sendAll (sends always the full DMX universe instead of only changed values. Default `false`)
 
-## Methods
+#### Methods
 
-#### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _uint8_ **value** **)**
+> Universes and channels are 0 based. Channel 1 should be sent as value 0, Channel 2 as value 1, ...
 
-#### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _array[uint8]_ **values** **)**
+##### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _uint8_ **value** **)**
+
+##### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _array[uint8]_ **values** **)**
 
 Every parameter except the value(s) is optional. If you supply a universe you need to supply the channel also.
-Defaults: universe = 0, channel = 1
+Defaults: universe = 0, channel = 0
 
 If error and response are null data remained unchanged and therefore nothing has been sent.
 
-#### **trigger(** [ [ *uint15* **oem** , ] _uint9_ **subkey** , ] _uint8_ **key** **)**
+##### **trigger(** [ [ *uint15* **oem** , ] _uint9_ **subkey** , ] _uint8_ **key** **)**
 
 Sends an ArtNet ArtTrigger packet. ArtTriggers are typically device specific and perform functions like starting and stopping shows.
 
@@ -90,18 +96,56 @@ Defaults:
 
 `trigger`s are NEVER throttled, as they are time sensitive. They are always sent immediately upon processing.
 
-#### **close( )**
+##### **close( )**
 
 Closes the connection and stops the send interval.
 
-#### **setHost(** _string_ **host** **)**
+##### **setHost(** _string_ **host** **)**
 
 Change the Art-Net hostname/address after initialization
 
-#### **setPort(** _number_ **port** **)**
+##### **setPort(** _number_ **port** **)**
 
 Change the Art-Net port after initialization.
 Does not work when using the broadcast address `255.255.255.255`.
+
+### Artnet socket
+
+> A class to send low level message without any device specific behavior
+
+```typescript
+import { ArtnetSocket, OPCODES } from "@vtabary/artnet";
+
+const artnet = new ArtnetSocket({
+  host: "127.0.0.1", // Your ip or domain or 255.255.255.255 for broadcast
+  port: 6454, // 6454 by default
+  iface: "", // empty by default
+});
+
+artnet.open();
+
+artnet.onMessage((message, packet) => {
+  // do something with the message or the packet
+  console.log(message, packet);
+});
+
+artnet.send({
+  type: OPCODES.DMX,
+  ...
+});
+
+artnet.close();
+```
+
+# Warning
+
+The only tested packets for now are `POLL`, `POLL_REPLY`, `DMX` and `TRIGGER`
+
+# Not supported
+
+- Firmware and UBEA upgrades messages
+- RDM support
+- Extended message types like `MEDIA*`, `DIRECTORY*`, `FILE*`, `TOD*`, `VIDEO*` and `TIME_SYNC`
 
 # Further Reading
 

@@ -11,4 +11,7 @@ export default {
   transform: {
     ...tsJestTransformCfg,
   },
+  moduleNameMapper: {
+    "^(\\.\\.?\\/.+)\\.js$": "$1",
+  },
 };

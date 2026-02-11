@@ -1,47 +1,46 @@
-import dgram from "node:dgram";
+import EventEmitter from "node:events";
+import os from "node:os";
+import { ArtNetSocket } from "./artnet-socket.js";
+import { DEVICE_STYLE, OP_CODES, type IArtNetMesssage } from "./definitions.js";
+import type { CustomEvent } from "./event-handler.js";
+import type { IDmx } from "./packets/dmx.js";
+import { splitInt16 } from "./utils/int16.js";
 
-/**
- * See http://www.artisticlicence.com/WebSiteMaster/User%20Guides/art-net.pdf page 40
- */
-function triggerPackage(oem: number, key: number, subkey: number): Buffer {
-  /* eslint-disable unicorn/number-literal-case */
-  const hOem = (oem >> 8) & 0xff;
-  const lOem = oem & 0xff;
+export class DMXEvent extends Event implements CustomEvent<"dmx"> {
+  private readonly _values: number[];
 
-  const header = [
-    65,
-    114,
-    116,
-    45,
-    78,
-    101,
-    116,
-    0,
-    0,
-    153,
-    0,
-    14,
-    0,
-    0,
-    hOem,
-    lOem,
-    key,
-    subkey,
-  ];
+  public readonly type = "dmx";
 
-  // Payload is manufacturer specific
-  const payload = new Array<null>(512).fill(null);
+  constructor(values: number[]) {
+    super("dmx");
+    this._values = values;
+  }
 
-  return Buffer.from([...header, ...payload] as number[]);
+  public get values(): number[] {
+    return this._values;
+  }
+}
+
+function getMacAndIps(): { ip: string; mac: string }[] {
+  const interfaces = os.networkInterfaces();
+  const addresses: { ip: string; mac: string }[] = [];
+
+  for (const k in interfaces) {
+    interfaces[k]?.forEach((address) => {
+      if (address.family === "IPv4") {
+        addresses.push({ ip: address.address, mac: address.mac });
+      }
+    });
+  }
+
+  return addresses;
 }
 
 export class ArtNet {
-  private readonly socket: dgram.Socket;
-
   /**
    * Index of the following arrays is the universe
    */
-  private readonly data: (null | number)[][] = []; // The 512 dmx channels
+  private readonly data: number[][] = []; // The 512 dmx channels
   /**
    * The intervals for the 4sec refresh
    */
@@ -56,6 +55,10 @@ export class ArtNet {
    */
   private sendThrottle: (NodeJS.Timeout | null)[] = [];
   /**
+   * The reference to the timeout of a poll reply
+   */
+  private pollReplyTimeout: NodeJS.Timeout | null = null;
+  /**
    * Boolean flag indicating if data should be sent after sendThrottle timeout
    */
   private sendDelayed: boolean[] = [];
@@ -69,13 +72,23 @@ export class ArtNet {
    */
   private readonly sendAll: boolean;
   /**
-   * @default "255.255.255.255"
+   * @default "Art Net device"
    */
-  private host = "255.255.255.255";
+  private readonly nodeName: string;
   /**
-   * @default 6454
+   * @default "ArtNet device"
    */
-  private port = 6454;
+  private readonly shortNodeName: string;
+  /**
+   * @default DEVICE_STYLE.NODE
+   */
+  private readonly DEVICE_STYLE: DEVICE_STYLE;
+  /**
+   * Events managers
+   */
+  private readonly eventEmitter = new EventEmitter();
+
+  private readonly socket: ArtNetSocket;
 
   constructor(options: {
     /**
@@ -101,32 +114,91 @@ export class ArtNet {
      * @default false
      */
     sendAll?: boolean;
+    /**
+     * The long name for the current node to reply to the poll message
+     * 63 ASCII characters maximum
+     */
+    nodeName?: string;
+    /**
+     * The short name for the current node to reply to the poll message
+     * 17 ASCII characters maximum
+     */
+    shortNodeName?: string;
+    /**
+     * The style of the device defined in https://art-net.org.uk/downloads/art-net.pdf page 24
+     */
+    DEVICE_STYLE?: DEVICE_STYLE;
   }) {
-    /* eslint-disable no-multi-spaces */
-    this.host = options.host ?? "255.255.255.255";
-    this.port = options.port ?? 6454;
-    this.refresh = options.refresh ?? 4000;
-    this.sendAll = options.sendAll ?? false;
-
-    this.socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-
-    this.socket.on("error", (err) => {
-      this.emit("error", err);
+    this.socket = new ArtNetSocket({
+      host: options.host ?? "255.255.255.255",
+      port: options.port ?? 6454,
+      iface: options.iface ?? "",
     });
 
-    if (options.iface && this.host === "255.255.255.255") {
-      this.socket.bind(this.port, options.iface, () => {
-        this.socket.setBroadcast(true);
-      });
-      /* eslint-disable unicorn/prefer-starts-ends-with */
-    } else if (new RegExp(/255$/).exec(this.host)) {
-      this.socket.bind(this.port, () => {
-        this.socket.setBroadcast(true);
-      });
-    }
+    this.refresh = options.refresh ?? 4000;
+    this.sendAll = options.sendAll ?? false;
+    this.nodeName = options.nodeName ?? "Art Net device";
+    this.shortNodeName = options.shortNodeName ?? "ArtNet device";
+    this.DEVICE_STYLE = options.DEVICE_STYLE ?? DEVICE_STYLE.NODE;
   }
 
-  public emit(event: string, ...args: any[]) {}
+  public open() {
+    this.socket.onMessage((message: IArtNetMesssage, packet: number[]) => {
+      this.onMessage(message, packet);
+    });
+    this.socket.open();
+  }
+
+  private onMessage(message: IArtNetMesssage, packet: number[]) {
+    switch (message.type) {
+      case OP_CODES.POLL:
+        this.onPoll();
+        break;
+      case OP_CODES.DMX:
+        this.eventEmitter.emit("dmx", message);
+        break;
+    }
+
+    this.eventEmitter.emit("message", message, packet);
+  }
+
+  /**
+   * See http://www.artisticlicence.com/WebSiteMaster/User%20Guides/art-net.pdf page 25
+   */
+  private onPoll() {
+    if (this.pollReplyTimeout) {
+      return;
+    }
+
+    getMacAndIps().forEach((address) => {
+      const ip = address.ip.split(".").map(Number) as [
+        number,
+        number,
+        number,
+        number,
+      ];
+      const mac = address.mac.split(":").map(Number) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
+
+      this.socket.send({
+        type: OP_CODES.POLL_REPLY,
+        ipAddress: [ip[0], ip[1], ip[2], ip[3]],
+        macAddress: [mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]],
+        port: 0x1936,
+        netSwitch: 0,
+        subSwitch: 0,
+        longNodeName: this.nodeName,
+        shortNodeName: this.shortNodeName,
+        deviceStyle: this.DEVICE_STYLE,
+      });
+    });
+  }
 
   /**
    * Every parameter except the value(s) is optional. If you supply a universe you need to supply the channel also. Defaults: universe = 0, channel = 1
@@ -163,7 +235,7 @@ export class ArtNet {
       channel = arguments[0];
       value = arguments[1];
     } else if (arguments.length === 1) {
-      channel = 1;
+      channel = 0;
       value = arguments[0];
     } else {
       return false;
@@ -171,7 +243,7 @@ export class ArtNet {
 
     universe ??= 0;
 
-    const universeData = this.data[universe] ?? new Array<null>(512).fill(null);
+    const universeData = this.data[universe] ?? new Array(512).fill(0);
     this.data[universe] = universeData;
 
     this.dataChanged[universe] ??= 0;
@@ -179,8 +251,8 @@ export class ArtNet {
     let index: number;
     if (typeof value === "object" && value.length > 0) {
       value.forEach((val, i) => {
-        index = channel + i - 1;
-        this.setDataChanged(universeData, universe, index + 1, val);
+        index = channel + i;
+        this.setDataChanged(universeData, universe, index, val);
       });
     } else {
       this.setDataChanged(universeData, universe, channel, value as number);
@@ -199,10 +271,10 @@ export class ArtNet {
     channel: number,
     value: number,
   ): void {
-    if (typeof value === "number" && universeData[channel - 1] !== value) {
-      universeData[channel - 1] = value ?? null;
+    if (typeof value === "number" && universeData[channel] !== value) {
+      universeData[channel] = value ?? 0;
       if (!this.dataChanged[universe] || channel > this.dataChanged[universe]) {
-        this.dataChanged[universe] = channel;
+        this.dataChanged[universe] = channel + 1;
       }
     }
   }
@@ -228,31 +300,37 @@ export class ArtNet {
     arg3?: number,
   ): Promise<boolean> {
     let oem: number | undefined = undefined;
-    let subkey: number;
+    let subKey: number;
     let key: number;
 
     switch (arguments.length) {
       case 3:
         oem = arguments[0];
-        subkey = arguments[1];
+        subKey = arguments[1];
         key = arguments[2];
         break;
       case 2:
-        subkey = arguments[0];
+        subKey = arguments[0];
         key = arguments[1];
         break;
       case 1:
-        subkey = 0;
+        subKey = 0;
         key = arguments[0];
         break;
       default:
         return false;
     }
 
-    oem = oem ?? 65535; // Most devices respond to "0xFFFF", which is considered a triggered broadcast.
-    key = key ?? 255;
+    oem = oem ?? 0xffff; // Most devices respond to "0xFFFF", which is considered a triggered broadcast.
+    key = key ?? 0xff;
 
-    await this.sendTrigger(oem, key, subkey);
+    await this.socketSend({
+      type: OP_CODES.TRIGGER,
+      oem,
+      key,
+      subKey,
+      data: new Array(512).fill(0),
+    });
 
     return true;
   }
@@ -260,7 +338,11 @@ export class ArtNet {
   /**
    * Closes the connection and stops the send interval.
    */
-  public close(): void {
+  public close(): Promise<void> {
+    if (!this.socket) {
+      return Promise.resolve();
+    }
+
     this.interval.forEach((interval) => {
       clearInterval(interval);
     });
@@ -269,88 +351,33 @@ export class ArtNet {
       if (interval) clearTimeout(interval);
     });
 
-    this.socket.close();
+    if (this.pollReplyTimeout) {
+      clearTimeout(this.pollReplyTimeout);
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      this.socket.close().then(resolve).catch(reject);
+    });
   }
 
   /**
    * Change the Art-Net hostname/address after initialization
    */
   public setHost(host: string): void {
-    this.host = host;
+    this.socket.setHost(host);
   }
 
   /**
    * Change the Art-Net port after initialization. Does not work when using the broadcast address 255.255.255.255.
    */
   public setPort(port: number): void {
-    if (this.host === "255.255.255.255") {
-      throw new Error(
-        "Can't change port when using broadcast address 255.255.255.255",
-      );
-    }
-
-    this.port = port;
-  }
-
-  /**
-   * See http://www.artisticlicence.com/WebSiteMaster/User%20Guides/art-net.pdf page 45
-   */
-  private artdmxPackage(universe: number, length = 2): Buffer {
-    if (length % 2) {
-      length += 1;
-    }
-
-    const hUni = (universe >> 8) & 0xff;
-    const lUni = universe & 0xff;
-
-    const hLen = (length >> 8) & 0xff;
-    const lLen = length & 0xff;
-
-    const header: number[] = [
-      65,
-      114,
-      116,
-      45,
-      78,
-      101,
-      116,
-      0,
-      0,
-      80,
-      0,
-      14,
-      0,
-      0,
-      lUni,
-      hUni,
-      hLen,
-      lLen,
-    ];
-
-    this.data[universe] ??= new Array<null>(512).fill(null);
-
-    return Buffer.from([
-      ...header,
-      ...(this.data[universe].slice(0, hLen * 256 + lLen) as number[]),
-    ]);
+    this.socket.setPort(port);
   }
 
   private startRefresh(universe: number): void {
     this.interval[universe] = setInterval(() => {
       this.send(universe, true);
     }, this.refresh);
-  }
-
-  /**
-   * Triggers should always be sent, never throttled
-   */
-  private async sendTrigger(
-    oem: number,
-    key: number,
-    subkey: number,
-  ): Promise<void> {
-    const buf = triggerPackage(oem, key, subkey);
-    await this.socketSend(buf);
   }
 
   /**
@@ -372,28 +399,28 @@ export class ArtNet {
 
     this.throttleUniverse(universe);
 
-    const buf = this.artdmxPackage(
-      universe,
-      refresh ? 512 : this.dataChanged[universe],
-    );
+    const { low: subUni, high: net } = splitInt16(universe);
+    const message: IDmx = {
+      data:
+        this.data[universe]?.slice(
+          0,
+          refresh ? 512 : this.dataChanged[universe],
+        ) ?? [],
+      sequence: 0,
+      physical: 0,
+      subUni,
+      net,
+    };
+
+    await this.socketSend({
+      type: OP_CODES.DMX,
+      ...message,
+    });
     this.dataChanged[universe] = 0;
-    await this.socketSend(buf);
   }
 
-  private socketSend(buf: string | Buffer<ArrayBufferLike>): Promise<number> {
-    return new Promise((resolve, reject) =>
-      this.socket.send(
-        buf,
-        0,
-        buf.length,
-        this.port,
-        this.host,
-        (err, bytes) => {
-          if (err) reject(err);
-          else resolve(bytes);
-        },
-      ),
-    );
+  private async socketSend(message: IArtNetMesssage): Promise<number> {
+    return this.socket.send(message);
   }
 
   private throttleUniverse(universe: number): void {
