@@ -62,6 +62,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
+      - run: npm build
       - name: Publish to NPM Registry
         run: |
           if [ "${{ github.event.release.prerelease }}" == "true" ]; then
