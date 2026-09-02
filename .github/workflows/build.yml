@@ -38,6 +38,7 @@ jobs:
           node-version: 24
           registry-url: https://npm.pkg.github.com/
       - run: npm ci
+      - run: npm run build
       - name: Publish to GitHub Packages
         run: |
           if [ "${{ github.event.release.prerelease }}" == "true" ]; then
@@ -62,7 +63,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
-      - run: npm build
+      - run: npm run build
       - name: Publish to NPM Registry
         run: |
           if [ "${{ github.event.release.prerelease }}" == "true" ]; then
