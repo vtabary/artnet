@@ -82,7 +82,7 @@ export class ArtNet {
   /**
    * @default DEVICE_STYLE.NODE
    */
-  private readonly DEVICE_STYLE: DEVICE_STYLE;
+  private readonly deviceStyle: DEVICE_STYLE;
   /**
    * Events managers
    */
@@ -125,9 +125,14 @@ export class ArtNet {
      */
     shortNodeName?: string;
     /**
+     * @deprecated use the deviceStyle option instead.
      * The style of the device defined in https://art-net.org.uk/downloads/art-net.pdf page 24
      */
     DEVICE_STYLE?: DEVICE_STYLE;
+    /**
+     * The style of the device defined in https://art-net.org.uk/downloads/art-net.pdf page 24
+     */
+    deviceStyle?: DEVICE_STYLE;
   }) {
     this.socket = new ArtNetSocket({
       host: options.host ?? "255.255.255.255",
@@ -139,7 +144,8 @@ export class ArtNet {
     this.sendAll = options.sendAll ?? false;
     this.nodeName = options.nodeName ?? "Art Net device";
     this.shortNodeName = options.shortNodeName ?? "ArtNet device";
-    this.DEVICE_STYLE = options.DEVICE_STYLE ?? DEVICE_STYLE.NODE;
+    this.deviceStyle =
+      options.deviceStyle ?? options.DEVICE_STYLE ?? DEVICE_STYLE.NODE;
   }
 
   public open() {
@@ -195,7 +201,7 @@ export class ArtNet {
         subSwitch: 0,
         longNodeName: this.nodeName,
         shortNodeName: this.shortNodeName,
-        deviceStyle: this.DEVICE_STYLE,
+        deviceStyle: this.deviceStyle,
       });
     });
   }
