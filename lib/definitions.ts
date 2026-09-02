@@ -66,7 +66,7 @@ export enum OP_CODES {
   TIME_SYNC = 0x9800,
 }
 
-export type IArtNetMesssage = { type: OP_CODES } & IArtNetContent;
+export type IArtNetMessage = { type: OP_CODES } & IArtNetContent;
 export type IArtNetContent =
   | IAddress
   | ICommand

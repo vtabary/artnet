@@ -1,11 +1,10 @@
 import EventEmitter from "node:events";
 import os from "node:os";
 import { ArtNetSocket } from "./artnet-socket.js";
-import { DEVICE_STYLE, OP_CODES, type IArtNetMesssage } from "./definitions.js";
+import { DEVICE_STYLE, OP_CODES, type IArtNetMessage } from "./definitions.js";
 import type { CustomEvent } from "./event-handler.js";
 import type { IDmx } from "./packets/dmx.js";
 import { splitInt16 } from "./utils/int16.js";
-
 export class DMXEvent extends Event implements CustomEvent<"dmx"> {
   private readonly _values: number[];
 
@@ -86,7 +85,10 @@ export class ArtNet {
   /**
    * Events managers
    */
-  private readonly eventEmitter = new EventEmitter();
+  private readonly eventEmitter = new EventEmitter<{
+    dmx: [message: IArtNetMessage];
+    message: [message: IArtNetMessage, packet: number[]];
+  }>();
 
   private readonly socket: ArtNetSocket;
 
@@ -148,18 +150,21 @@ export class ArtNet {
       options.deviceStyle ?? options.DEVICE_STYLE ?? DEVICE_STYLE.NODE;
   }
 
-  public get events(): EventEmitter {
+  public get events(): EventEmitter<{
+    dmx: [message: IArtNetMessage];
+    message: [message: IArtNetMessage, packet: number[]];
+  }> {
     return this.eventEmitter;
   }
 
   public open() {
-    this.socket.onMessage((message: IArtNetMesssage, packet: number[]) => {
+    this.socket.onMessage((message: IArtNetMessage, packet: number[]) => {
       this.onMessage(message, packet);
     });
     this.socket.open();
   }
 
-  private onMessage(message: IArtNetMesssage, packet: number[]) {
+  private onMessage(message: IArtNetMessage, packet: number[]) {
     switch (message.type) {
       case OP_CODES.POLL:
         this.onPoll();
@@ -429,7 +434,7 @@ export class ArtNet {
     this.dataChanged[universe] = 0;
   }
 
-  private async socketSend(message: IArtNetMesssage): Promise<number> {
+  private async socketSend(message: IArtNetMessage): Promise<number> {
     return this.socket.send(message);
   }
 

@@ -1,8 +1,7 @@
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
-import type { IArtNetMesssage } from "./definitions.js";
+import type { IArtNetMessage } from "./definitions.js";
 import { buildPacket, parsePacket } from "./packet.js";
-
 export class ArtNetSocket {
   private readonly socket: dgram.Socket;
   private socketOpened = false;
@@ -72,7 +71,7 @@ export class ArtNetSocket {
   }
 
   public onMessage(
-    cb: (message: IArtNetMesssage, packet: number[]) => void,
+    cb: (message: IArtNetMessage, packet: number[]) => void,
   ): void {
     this.eventEmitter.on("message", cb);
   }
@@ -125,7 +124,7 @@ export class ArtNetSocket {
   /**
    * If refresh is set to true all 512 channels will be sent, otherwise from channel 1 to the last changed channel
    */
-  public async send(message: IArtNetMesssage): Promise<number> {
+  public async send(message: IArtNetMessage): Promise<number> {
     if (!this.socketOpened) {
       throw new Error("Socket not initialized. Open the socket first.");
     }
