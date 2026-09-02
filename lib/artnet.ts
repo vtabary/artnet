@@ -148,6 +148,10 @@ export class ArtNet {
       options.deviceStyle ?? options.DEVICE_STYLE ?? DEVICE_STYLE.NODE;
   }
 
+  public get events(): EventEmitter {
+    return this.eventEmitter;
+  }
+
   public open() {
     this.socket.onMessage((message: IArtNetMesssage, packet: number[]) => {
       this.onMessage(message, packet);

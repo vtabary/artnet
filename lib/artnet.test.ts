@@ -1,5 +1,7 @@
 import dgram from "node:dgram";
-import { ArtNet } from "./artnet";
+import { ArtNetSocket } from "./artnet-socket.js";
+import { ArtNet } from "./artnet.js";
+import { OP_CODES } from "./definitions.js";
 
 jest.mock("node:dgram");
 
@@ -171,6 +173,57 @@ describe("ArtNet", () => {
       // index 14, 15, 16, 17
       expect(buffer[16]).toBe(200); // key
       expect(buffer[17]).toBe(100); // subkey
+      artnet.close();
+    });
+  });
+
+  describe("close()", () => {
+    it("should close the socket", async () => {
+      const artnet = new ArtNet({});
+      artnet.open();
+      await artnet.set(1, 255);
+      artnet.close();
+      expect(mockSocket.close).toHaveBeenCalled();
+    });
+  });
+
+  describe("events", () => {
+    it("should emit dmx event on set", async () => {
+      jest
+        .spyOn(ArtNetSocket.prototype, "onMessage")
+        .mockImplementation((callback) => {
+          callback(
+            {
+              type: OP_CODES.DMX,
+              protocol: 14,
+              sequence: 1,
+              physical: 0,
+              subUni: 0,
+              net: 0,
+              data: [255, 0, 0, 255],
+            },
+            [],
+          );
+        });
+
+      const artnet = new ArtNet({});
+      const dmxHandler = jest.fn();
+
+      artnet.events.on("dmx", dmxHandler);
+      artnet.open();
+
+      expect(dmxHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: OP_CODES.DMX,
+          protocol: 14,
+          sequence: 1,
+          physical: 0,
+          subUni: 0,
+          net: 0,
+          data: [255, 0, 0, 255],
+        }),
+      );
+
       artnet.close();
     });
   });
