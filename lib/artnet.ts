@@ -151,7 +151,7 @@ export class ArtNet {
   }
 
   public get events(): EventEmitter<{
-    dmx: [message: IArtNetMessage];
+    dmx: [message: IDmx];
     message: [message: IArtNetMessage, packet: number[]];
   }> {
     return this.eventEmitter;
