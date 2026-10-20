@@ -66,7 +66,23 @@ export enum OP_CODES {
   TIME_SYNC = 0x9800,
 }
 
-export type IArtNetMessage = { type: OP_CODES } & IArtNetContent;
+export type IArtNetMessage =
+  | (IAddress & { type: OP_CODES.ADDRESS })
+  | (ICommand & { type: OP_CODES.COMMAND })
+  | (IDataReply & { type: OP_CODES.DATA_REPLY })
+  | (IDataRequest & { type: OP_CODES.DATA_REQUEST })
+  | (IDiagData & { type: OP_CODES.DIAG_DATA })
+  | (IDmx & { type: OP_CODES.DMX })
+  | (IInput & { type: OP_CODES.INPUT })
+  | (IIpProg & { type: OP_CODES.IP_PROG })
+  | (IIpProgReply & { type: OP_CODES.IP_PROG_REPLY })
+  | (INZS & { type: OP_CODES.NZS })
+  | (IVLC & { type: OP_CODES.NZS })
+  | (IPollReply & { type: OP_CODES.POLL_REPLY })
+  | (IPoll & { type: OP_CODES.POLL })
+  | (ISync & { type: OP_CODES.SYNC })
+  | (ITimeCode & { type: OP_CODES.TIME_CODE })
+  | (ITrigger & { type: OP_CODES.TRIGGER });
 export type IArtNetContent =
   | IAddress
   | ICommand

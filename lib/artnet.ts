@@ -180,39 +180,53 @@ export class ArtNet {
   /**
    * See http://www.artisticlicence.com/WebSiteMaster/User%20Guides/art-net.pdf page 25
    */
-  private onPoll() {
-    if (this.pollReplyTimeout) {
-      return;
-    }
+  private async onPoll(): Promise<void> {
+    await Promise.all(
+      getMacAndIps().map((address) => {
+        const ip = address.ip.split(".").map(Number) as [
+          number,
+          number,
+          number,
+          number,
+        ];
+        const mac = address.mac.split(":").map(Number) as [
+          number,
+          number,
+          number,
+          number,
+          number,
+          number,
+        ];
 
-    getMacAndIps().forEach((address) => {
-      const ip = address.ip.split(".").map(Number) as [
-        number,
-        number,
-        number,
-        number,
-      ];
-      const mac = address.mac.split(":").map(Number) as [
-        number,
-        number,
-        number,
-        number,
-        number,
-        number,
-      ];
+        return this.socket.send({
+          type: OP_CODES.POLL_REPLY,
+          ipAddress: [ip[0], ip[1], ip[2], ip[3]],
+          port: 0x1936,
 
-      this.socket.send({
-        type: OP_CODES.POLL_REPLY,
-        ipAddress: [ip[0], ip[1], ip[2], ip[3]],
-        macAddress: [mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]],
-        port: 0x1936,
-        netSwitch: 0,
-        subSwitch: 0,
-        longNodeName: this.nodeName,
-        shortNodeName: this.shortNodeName,
-        deviceStyle: this.deviceStyle,
-      });
-    });
+          versionInfo: 0,
+          netSwitch: 0,
+          subSwitch: 0,
+          oem: 0,
+          ubeaVersion: 0,
+          status1: 0,
+          estaManufacturer: 0,
+          shortNodeName: this.shortNodeName,
+          longNodeName: this.nodeName,
+          nodeReport: "",
+          numPorts: 0,
+          portTypes: [0, 0, 0, 0],
+          goodInput: [0, 0, 0, 0],
+          goodOutputA: [0, 0, 0, 0],
+          swIn: [0, 0, 0, 0],
+          swOut: [0, 0, 0, 0],
+          sACNPriority: 0,
+          swMacro: 0,
+          swRemote: 0,
+          deviceStyle: this.deviceStyle,
+          macAddress: [mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]],
+        });
+      }),
+    );
   }
 
   /**

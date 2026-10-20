@@ -5,10 +5,28 @@ export interface ITrigger {
    * Art-Net protocol revision number
    */
   protocol?: number;
+  /**
+   * The Oem code of nodes that shall accept this trigger
+   */
   oem: number;
+  /**
+   * The Key is an 8-bit number which defines the purpose of the packet. The interpretation
+   * of this field is dependent upon the Oem code. If the Oem code is set to a value other
+   * than 0xffff then the Key and SubKey fields are manufacturer specific.
+   */
   key: TRIGGER_KEY_VALUES;
+  /**
+   * The SubKey is an 8-bit number. The interpretation of this field is dependent upon the
+   * Oem code. If the Oem code is set to a value other than ffff16 then the Key and SubKey
+   * fields are manufacturer specific.
+   */
   subKey: number;
-  data: string;
+  /**
+   * The Payload is a fixed length array of 512, bytes. The interpretation of this field is
+   * dependent upon the Oem code. If the Oem code is set to a value other than 0xffff then
+   * the Payload is manufacturer specific
+   */
+  data: Buffer;
 }
 
 export enum TRIGGER_KEY_VALUES {
@@ -43,6 +61,6 @@ export function parseContent(packet: number[]): ITrigger {
     oem: mergeInt16(packet[13] ?? 0, packet[12] ?? 0),
     key: packet[14] ?? TRIGGER_KEY_VALUES.KEY_ASCII,
     subKey: packet[15] ?? 0,
-    data: Buffer.from(packet.slice(16)).toString(),
+    data: Buffer.from(packet.slice(16)),
   };
 }

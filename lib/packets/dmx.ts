@@ -16,6 +16,7 @@ export interface IDmx {
    */
   net: number;
   data: number[];
+  universe: number;
 }
 
 export function buildContent(data: IDmx): number[] {
@@ -46,5 +47,6 @@ export function parseContent(packet: number[]): IDmx {
     subUni: packet[14] ?? 0,
     net: packet[15] ?? 0,
     data: packet.slice(18, 18 + dataLength),
+    universe: mergeInt16(packet[14] ?? 0, packet[15] ?? 0),
   };
 }
