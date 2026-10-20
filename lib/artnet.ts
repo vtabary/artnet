@@ -39,7 +39,7 @@ export class ArtNet {
   /**
    * Index of the following arrays is the universe
    */
-  private readonly data: number[][] = []; // The 512 dmx channels
+  private data: number[][] = []; // The 512 dmx channels
   /**
    * The intervals for the 4sec refresh
    */
@@ -157,17 +157,19 @@ export class ArtNet {
     return this.eventEmitter;
   }
 
-  public open() {
-    this.socket.onMessage((message: IArtNetMessage, packet: number[]) => {
-      this.onMessage(message, packet);
-    });
-    this.socket.open();
+  public async open(): Promise<void> {
+    this.socket.events.on(
+      "message",
+      (message: IArtNetMessage, packet: number[]) =>
+        this.onMessage(message, packet),
+    );
+    await this.socket.listen();
   }
 
-  private onMessage(message: IArtNetMessage, packet: number[]) {
+  private async onMessage(message: IArtNetMessage, packet: number[]) {
     switch (message.type) {
       case OP_CODES.POLL:
-        this.onPoll();
+        await this.onPoll();
         break;
       case OP_CODES.DMX:
         this.eventEmitter.emit("dmx", message);
@@ -230,27 +232,22 @@ export class ArtNet {
   }
 
   /**
-   * Every parameter except the value(s) is optional. If you supply a universe you need to supply the channel also. Defaults: universe = 0, channel = 1
+   * Every parameter except the value(s) is optional. If you supply a universe you need to supply the channel also. Defaults: universe = 0, channel = 0
    * Callback is called with (error, response) params. If error and response are null data remained unchanged and therefore nothing has been sent.
    */
-  public async set(value: number): Promise<boolean>;
-  public async set(values: number[]): Promise<boolean>;
-  public async set(channel: number, value: number): Promise<boolean>;
-  public async set(channel: number, values: number[]): Promise<boolean>;
+  public async set(values: number | number[]): Promise<boolean>;
   public async set(
-    universe: number,
     channel: number,
-    value: number,
+    values: number | number[],
   ): Promise<boolean>;
   public async set(
     universe: number,
     channel: number,
-    values: number[],
+    values: number | number[],
   ): Promise<boolean>;
   public async set(
     arg1: number | number[],
-    arg2?: number | number[],
-    arg3?: number | number[],
+    ...args: (number | number[])[]
   ): Promise<boolean> {
     let universe: number;
     let channel: number;
@@ -272,26 +269,47 @@ export class ArtNet {
 
     universe ??= 0;
 
+    if (typeof value === "object") {
+      await this.setFullUniverse(universe, value);
+    } else {
+      const universeData = this.data[universe] ?? new Array(512).fill(0);
+      this.data[universe] = universeData;
+
+      this.dataChanged[universe] ??= 0;
+
+      this.setDataChanged(universeData, universe, channel, value);
+      if (this.dataChanged[universe]) {
+        await this.send(universe);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Override all the channel values for a universe and send a packet to the network with the new values
+   */
+  public async setFullUniverse(
+    universe: number,
+    values: number[],
+  ): Promise<void> {
     const universeData = this.data[universe] ?? new Array(512).fill(0);
     this.data[universe] = universeData;
 
-    this.dataChanged[universe] ??= 0;
+    const channel = 0;
+    if (values.length === 0) {
+      return;
+    }
 
     let index: number;
-    if (typeof value === "object" && value.length > 0) {
-      value.forEach((val, i) => {
-        index = channel + i;
-        this.setDataChanged(universeData, universe, index, val);
-      });
-    } else {
-      this.setDataChanged(universeData, universe, channel, value as number);
-    }
+    values.forEach((val, i) => {
+      index = channel + i;
+      this.setDataChanged(universeData, universe, index, val);
+    });
 
     if (this.dataChanged[universe]) {
       await this.send(universe);
     }
-
-    return true;
   }
 
   private setDataChanged(
@@ -358,7 +376,7 @@ export class ArtNet {
       oem,
       key,
       subKey,
-      data: new Array(512).fill(0),
+      data: Buffer.from(new Array<number>(512).fill(0)),
     });
 
     return true;
@@ -367,26 +385,10 @@ export class ArtNet {
   /**
    * Closes the connection and stops the send interval.
    */
-  public close(): Promise<void> {
-    if (!this.socket) {
-      return Promise.resolve();
-    }
+  public async close(): Promise<void> {
+    this.clear();
 
-    this.interval.forEach((interval) => {
-      clearInterval(interval);
-    });
-
-    this.sendThrottle.forEach((interval) => {
-      if (interval) clearTimeout(interval);
-    });
-
-    if (this.pollReplyTimeout) {
-      clearTimeout(this.pollReplyTimeout);
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      this.socket.close().then(resolve).catch(reject);
-    });
+    await this.socket.close();
   }
 
   /**
@@ -405,7 +407,7 @@ export class ArtNet {
 
   private startRefresh(universe: number): void {
     this.interval[universe] = setInterval(() => {
-      this.send(universe, true);
+      void this.send(universe, true);
     }, this.refresh);
   }
 
@@ -439,6 +441,7 @@ export class ArtNet {
       physical: 0,
       subUni,
       net,
+      universe,
     };
 
     await this.socketSend({
@@ -464,5 +467,26 @@ export class ArtNet {
         void this.send(universe);
       }
     }, 25);
+  }
+
+  public clear(): void {
+    this.interval.forEach((interval) => {
+      clearInterval(interval);
+    });
+    this.interval = [];
+
+    this.sendThrottle.forEach((interval) => {
+      if (interval) clearTimeout(interval);
+    });
+    this.sendThrottle = [];
+
+    if (this.pollReplyTimeout) {
+      clearTimeout(this.pollReplyTimeout);
+      this.pollReplyTimeout = null;
+    }
+
+    this.sendDelayed = [];
+    this.dataChanged = [];
+    this.data = [];
   }
 }

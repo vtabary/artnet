@@ -1,7 +1,8 @@
 import dgram from "node:dgram";
+import EventEmitter from "node:events";
 import { ArtNetSocket } from "./artnet-socket.js";
 import { ArtNet } from "./artnet.js";
-import { OP_CODES } from "./definitions.js";
+import { OP_CODES, type IArtNetMessage } from "./definitions.js";
 
 jest.mock("node:dgram");
 
@@ -10,6 +11,7 @@ describe("ArtNet", () => {
     bind: jest.Mock;
     setBroadcast: jest.Mock;
     on: jest.Mock;
+    once: jest.Mock;
     send: jest.Mock;
     close: jest.Mock;
     removeAllListeners: jest.Mock;
@@ -23,6 +25,7 @@ describe("ArtNet", () => {
       }),
       setBroadcast: jest.fn(),
       on: jest.fn(),
+      once: jest.fn(),
       send: jest.fn((msg, offset, length, port, address, cb) => {
         if (cb) cb(null, length);
       }),
@@ -41,10 +44,6 @@ describe("ArtNet", () => {
   describe("#new", () => {
     it("should initialize with default options", () => {
       new ArtNet({});
-      expect(dgram.createSocket).toHaveBeenCalledWith({
-        type: "udp4",
-        reuseAddr: true,
-      });
     });
   });
 
@@ -53,6 +52,12 @@ describe("ArtNet", () => {
       const artnet = new ArtNet({});
       artnet.open();
       // Default host is broadcast, so it should bind
+
+      expect(dgram.createSocket).toHaveBeenCalledWith({
+        type: "udp4",
+        reuseAddr: true,
+      });
+
       expect(mockSocket.bind).toHaveBeenCalled();
       expect(mockSocket.setBroadcast).toHaveBeenCalledWith(true);
     });
@@ -61,7 +66,7 @@ describe("ArtNet", () => {
       const artnet = new ArtNet({ host: "192.168.1.10" });
       artnet.open();
       // Unicast usually doesn't bind in this implementation unless it ends in 255
-      expect(mockSocket.bind).not.toHaveBeenCalled();
+      expect(mockSocket.bind).toHaveBeenCalled();
     });
 
     it("should open the socket if host ends in 255", () => {
@@ -92,6 +97,15 @@ describe("ArtNet", () => {
 
     afterEach(() => {
       artnet.close();
+    });
+
+    it("should create a socket during the first call", async () => {
+      await artnet.set(255);
+
+      expect(dgram.createSocket).toHaveBeenCalledWith({
+        type: "udp4",
+        reuseAddr: true,
+      });
     });
 
     it("should set a single value (channel 1 default)", async () => {
@@ -189,28 +203,44 @@ describe("ArtNet", () => {
 
   describe("events", () => {
     it("should emit dmx event on set", async () => {
-      jest
-        .spyOn(ArtNetSocket.prototype, "onMessage")
-        .mockImplementation((callback) => {
-          callback(
-            {
-              type: OP_CODES.DMX,
-              protocol: 14,
-              sequence: 1,
-              physical: 0,
-              subUni: 0,
-              net: 0,
-              data: [255, 0, 0, 255],
-            },
-            [],
-          );
-        });
+      const mockEvents = new EventEmitter<{
+        message: [
+          IArtNetMessage,
+          number[],
+          { address: string; family: string; port: number; size: number },
+        ];
+      }>();
 
-      const artnet = new ArtNet({});
+      jest
+        .spyOn(ArtNetSocket.prototype, "events", "get")
+        .mockReturnValueOnce(mockEvents);
+
       const dmxHandler = jest.fn();
+      const artnet = new ArtNet({});
 
       artnet.events.on("dmx", dmxHandler);
       artnet.open();
+
+      mockEvents.emit(
+        "message",
+        {
+          type: OP_CODES.DMX,
+          protocol: 14,
+          sequence: 1,
+          physical: 0,
+          subUni: 0,
+          net: 0,
+          data: [255, 0, 0, 255],
+          universe: 0,
+        },
+        [],
+        {
+          address: "",
+          family: "",
+          port: 0,
+          size: 0,
+        },
+      );
 
       expect(dmxHandler).toHaveBeenCalledWith(
         expect.objectContaining({

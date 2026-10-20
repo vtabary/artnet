@@ -74,16 +74,16 @@ This lib throttles the maximum send rate to ~40Hz. Unchanged data is refreshed e
 
 > Universes and channels are 0 based. Channel 1 should be sent as value 0, Channel 2 as value 1, ...
 
-##### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _uint8_ **value** **)**
+##### **set(** [ [ _uint15_ **universe** , ] _uint9_ **channel** , ] _uint8_ **value** **)**
 
-##### **set(** [ [ *uint15* **universe** , ] _uint9_ **channel** , ] _array[uint8]_ **values** **)**
+##### **set(** [ [ _uint15_ **universe** , ] _uint9_ **channel** , ] _array[uint8]_ **values** **)**
 
 Every parameter except the value(s) is optional. If you supply a universe you need to supply the channel also.
 Defaults: universe = 0, channel = 0
 
 If error and response are null data remained unchanged and therefore nothing has been sent.
 
-##### **trigger(** [ [ *uint15* **oem** , ] _uint9_ **subkey** , ] _uint8_ **key** **)**
+##### **trigger(** [ [ _uint15_ **oem** , ] _uint9_ **subkey** , ] _uint8_ **key** **)**
 
 Sends an ArtNet ArtTrigger packet. ArtTriggers are typically device specific and perform functions like starting and stopping shows.
 
@@ -139,7 +139,7 @@ artnet.close();
 
 # Warning
 
-The only tested packets for now are `POLL`, `POLL_REPLY`, `DMX` and `TRIGGER`
+The only tested packets for now are `POLL`, `POLL_REPLY` (partially), `DMX` and `TRIGGER`
 
 # Not supported
 
