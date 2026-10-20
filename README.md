@@ -1,6 +1,8 @@
 # artnet
 
 [![License][mit-badge]][mit-url]
+[![NPM Version](https://img.shields.io/npm/v/%40vtabary%2Fartnet)](https://www.npmjs.com/package/@vtabary/artnet)
+[![Node.js Package](https://github.com/vtabary/artnet/actions/workflows/build.yml/badge.svg)](https://github.com/vtabary/artnet/actions/workflows/build.yml)
 
 > This is a [Node.js](http://nodejs.org) module that can be used to send ArtDMX packages to an [Art-Net](http://en.wikipedia.org/wiki/Art-Net) node.
 
