@@ -94,7 +94,7 @@ export function buildPacket<T extends IArtNetContent>(
 export function parsePacket<T extends IArtNetContent>(
   data: number[],
 ): { type: OP_CODES } & T {
-  const OP_CODES: OP_CODES = mergeInt16(data[9] ?? 0, data[8] ?? 0);
+  const OP_CODES: OP_CODES = mergeInt16(data[8] ?? 0, data[9] ?? 0);
 
   return {
     type: OP_CODES,
