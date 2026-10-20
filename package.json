@@ -1,5 +1,5 @@
 {
-  "version": "3.0.8",
+  "version": "3.1.0",
   "name": "@vtabary/artnet",
   "description": "Module to send commands to an Art-Net node",
   "homepage": "http://github.com/vtabary/artnet",
