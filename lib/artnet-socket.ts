@@ -159,8 +159,11 @@ export class ArtNetSocket {
    * If refresh is set to true all 512 channels will be sent, otherwise from channel 1 to the last changed channel
    */
   public async send(message: IArtNetMessage): Promise<number> {
-    const socket = await this.bind(0, this.host);
-    this.socketSender = socket;
+    let socket = this.socketSender;
+    if (!socket) {
+      socket = await this.bind(0, this.host);
+      this.socketSender = socket;
+    }
     const buf = Buffer.from(buildPacket(message));
 
     return new Promise((resolve, reject) =>

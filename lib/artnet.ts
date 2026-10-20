@@ -371,7 +371,7 @@ export class ArtNet {
     oem = oem ?? 0xffff; // Most devices respond to "0xFFFF", which is considered a triggered broadcast.
     key = key ?? 0xff;
 
-    await this.socketSend({
+    await this.socket.send({
       type: OP_CODES.TRIGGER,
       oem,
       key,
@@ -443,20 +443,15 @@ export class ArtNet {
       net,
       universe,
     };
-
-    await this.socketSend({
+    await this.socket.send({
       type: OP_CODES.DMX,
       ...message,
     });
     this.dataChanged[universe] = 0;
   }
 
-  private async socketSend(message: IArtNetMessage): Promise<number> {
-    return this.socket.send(message);
-  }
-
   private throttleUniverse(universe: number): void {
-    if (this.sendThrottle[universe] !== null) {
+    if (this.sendThrottle[universe]) {
       clearTimeout(this.sendThrottle[universe]);
     }
 
